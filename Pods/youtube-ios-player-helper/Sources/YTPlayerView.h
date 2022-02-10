@@ -141,6 +141,13 @@ typedef void (^YTPlaybackQualityCompletionHandler)(YTPlaybackQuality result,
  */
 - (nullable UIView *)playerViewPreferredInitialLoadingView:(nonnull YTPlayerView *)playerView;
 
+/**
+ * Picture in picture state delegate.
+ * enable: picture-in-picture
+ * disable: inline or etc, ...
+ */
+- (void)playerView:(nonnull YTPlayerView *)playerView didChangeToStatePictureInPicture:(NSString * _Nullable)state;
+
 @end
 
 /**
@@ -646,5 +653,13 @@ typedef void (^YTPlaybackQualityCompletionHandler)(YTPlaybackQuality result,
  * Intended to use for testing, should not be used in production code.
  */
 - (void)removeWebView;
+
+#pragma mark - Picture in Picture
+
+- (void)requestPictureInPictureState:(_Nullable YTStringCompletionHandler)completionHandler;
+- (void)pictureInPicture;
+- (void)requestPictureInPicture;
+- (void)releasePictureInPicture;
+
 
 @end

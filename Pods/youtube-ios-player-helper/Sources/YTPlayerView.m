@@ -52,6 +52,7 @@ NSString static *const kYTPlayerCallbackOnStateChange = @"onStateChange";
 NSString static *const kYTPlayerCallbackOnPlaybackQualityChange = @"onPlaybackQualityChange";
 NSString static *const kYTPlayerCallbackOnError = @"onError";
 NSString static *const kYTPlayerCallbackOnPlayTime = @"onPlayTime";
+NSString static *const kYTPlayerCallbackOnPictureInPictureChange = @"onPictureInPicrueState";
 
 NSString static *const kYTPlayerCallbackOnYouTubeIframeAPIReady = @"onYouTubeIframeAPIReady";
 NSString static *const kYTPlayerCallbackOnYouTubeIframeAPIFailedToLoad = @"onYouTubeIframeAPIFailedToLoad";
@@ -66,6 +67,7 @@ NSString static *const kYTPlayerSyndicationRegexPattern = @"^https://tpc.googles
 
 @property (nonatomic) NSURL *originURL;
 @property (nonatomic, weak) UIView *initialLoadingView;
+@property (nonatomic, weak) WKFrameInfo *visibleFrame;
 
 @end
 
@@ -405,6 +407,111 @@ NSString static *const kYTPlayerSyndicationRegexPattern = @"^https://tpc.googles
   }];
 }
 
+#pragma mark - Picture in Picture
+
+/// picture-in-picture: true, other: false
+- (void)requestPictureInPictureState:(_Nullable YTStringCompletionHandler)completionHandler {
+    [self evaluateJavaScript:@"player.querySelector('video').webkitPresentationMode;"
+                  //isSubFrame: YES
+           completionHandler:^(id  _Nullable result, NSError * _Nullable error) {
+        if (!completionHandler) {
+            return;
+        }
+        if (error) {
+            completionHandler(nil, error);
+            return;
+        }
+        if (!result || ![result isKindOfClass:[NSString class]]) {
+            completionHandler(nil, nil);
+            return;
+        }
+        completionHandler(result, nil);
+    }];
+}
+
+- (void)pictureInPicture {
+    [self evaluateJavaScript:@"pipButton.click();"
+                  //isSubFrame: YES
+           completionHandler:^(id  _Nullable result, NSError * _Nullable error) {
+        // Error Domain=WKErrorDomain Code=4 "A JavaScript exception occurred" UserInfo={WKJavaScriptExceptionLineNumber=0, WKJavaScriptExceptionMessage=TypeError: undefined is not a function, WKJavaScriptExceptionColumnNumber=0, NSLocalizedDescription=A JavaScript exception occurred}
+        /*
+         {
+         NSLocalizedDescription = "A JavaScript exception occurred";
+         WKJavaScriptExceptionColumnNumber = 32;
+         WKJavaScriptExceptionLineNumber = 1;
+         WKJavaScriptExceptionMessage = "TypeError: null is not an object (evaluating 'document.querySelector('video').webkitSetPresentationMode')";
+         WKJavaScriptExceptionSourceURL = "http://co.vlending.mubeat.dev/";
+         }
+         */
+        /*
+         if (!completionHandler) {
+         return;
+         }
+         if (error) {
+         completionHandler(nil, error);
+         return;
+         }
+         if (!result || ![result isKindOfClass:[NSString class]]) {
+         completionHandler(nil, nil);
+         return;
+         }
+         completionHandler(result, nil);
+         */
+    }];
+}
+
+- (void)requestPictureInPicture {
+    [self evaluateJavaScript:@"player.querySelector('video').webkitSetPresentationMode('picture-in-picture');"
+                  //isSubFrame: YES
+           completionHandler:^(id  _Nullable result, NSError * _Nullable error) {
+        // Error Domain=WKErrorDomain Code=4 "A JavaScript exception occurred" UserInfo={WKJavaScriptExceptionLineNumber=0, WKJavaScriptExceptionMessage=TypeError: undefined is not a function, WKJavaScriptExceptionColumnNumber=0, NSLocalizedDescription=A JavaScript exception occurred}
+        /*
+         {
+         NSLocalizedDescription = "A JavaScript exception occurred";
+         WKJavaScriptExceptionColumnNumber = 32;
+         WKJavaScriptExceptionLineNumber = 1;
+         WKJavaScriptExceptionMessage = "TypeError: null is not an object (evaluating 'document.querySelector('video').webkitSetPresentationMode')";
+         WKJavaScriptExceptionSourceURL = "http://co.vlending.mubeat.dev/";
+         }
+         */
+        /*
+         if (!completionHandler) {
+         return;
+         }
+         if (error) {
+         completionHandler(nil, error);
+         return;
+         }
+         if (!result || ![result isKindOfClass:[NSString class]]) {
+         completionHandler(nil, nil);
+         return;
+         }
+         completionHandler(result, nil);
+         */
+    }];
+}
+
+- (void)releasePictureInPicture {
+    [self evaluateJavaScript:@"player.querySelector('video').webkitSetPresentationMode('inline');"
+                  //isSubFrame: YES
+           completionHandler:^(id  _Nullable result, NSError * _Nullable error) {
+        /*
+         if (!completionHandler) {
+         return;
+         }
+         if (error) {
+         completionHandler(nil, error);
+         return;
+         }
+         if (!result || ![result isKindOfClass:[NSString class]]) {
+         completionHandler(nil, nil);
+         return;
+         }
+         completionHandler(result, nil);
+         */
+    }];
+}
+
 #pragma mark - Playlist methods
 
 - (void)playlist:(_Nullable YTArrayCompletionHandler)completionHandler {
@@ -517,6 +624,13 @@ NSString static *const kYTPlayerSyndicationRegexPattern = @"^https://tpc.googles
 - (void)webView:(WKWebView *)webView
 decidePolicyForNavigationAction:(WKNavigationAction *)navigationAction
 decisionHandler:(void (^)(WKNavigationActionPolicy))decisionHandler {
+    WKNavigationType type = [navigationAction navigationType];
+    WKFrameInfo *targetFrame = [navigationAction targetFrame];
+    WKFrameInfo *sourceFrame = [navigationAction sourceFrame];
+
+    if (type == WKNavigationTypeOther && targetFrame != nil && ![targetFrame isEqual:[NSNull class]] && [sourceFrame.request.URL.absoluteString rangeOfString:@"www.youtube.com/embed/"].location != NSNotFound) {
+        self.visibleFrame = sourceFrame;
+    }
   NSURLRequest *request = navigationAction.request;
   if ([request.URL.scheme isEqual:@"ytplayer"]) {
     [self notifyDelegateOfYouTubeCallbackUrl:request.URL];
@@ -556,11 +670,15 @@ createWebViewWithConfiguration:(WKWebViewConfiguration *)configuration
 
 #pragma mark - Private methods
 
+/* Blocked a frame with origin "http://co.vlending.mubeat.dev" from accessing a frame with origin "https://www.youtube.com".  The frame requesting access has a protocol of "http", the frame being accessed has a protocol of "https". Protocols must match. */
 - (NSURL *)originURL {
   if (!_originURL) {
+    /*
     NSString *bundleId = [[NSBundle mainBundle] bundleIdentifier];
     NSString *stringURL = [[NSString stringWithFormat:@"http://%@", bundleId] lowercaseString];
     _originURL = [NSURL URLWithString:stringURL];
+    */
+    _originURL = [NSURL URLWithString:@"https://www.youtube.com"];
   }
   return _originURL;
 }
@@ -714,7 +832,8 @@ createWebViewWithConfiguration:(WKWebViewConfiguration *)configuration
         @"onReady" : @"onReady",
         @"onStateChange" : @"onStateChange",
         @"onPlaybackQualityChange" : @"onPlaybackQualityChange",
-        @"onError" : @"onPlayerError"
+        @"onError" : @"onPlayerError",
+        @"onPictureInPicrueState" : @"onPictureInPictureChange"
   };
   NSMutableDictionary *playerParams = [[NSMutableDictionary alloc] init];
   if (additionalPlayerParams) {
@@ -886,6 +1005,34 @@ createWebViewWithConfiguration:(WKWebViewConfiguration *)configuration
     completionHandler(result, nil);
   }];
 }
+
+- (void)evaluateJavaScript:(NSString *)jsToExecute
+                isSubFrame:(BOOL)subFrame
+         completionHandler:(void(^)(id _Nullable result, NSError *_Nullable error))completionHandler {
+    if (subFrame && @available(iOS 14.0, *)) {
+        [self.webView evaluateJavaScript:jsToExecute
+                                 inFrame:self.visibleFrame
+                          inContentWorld: [WKContentWorld defaultClientWorld]
+                       completionHandler:^(id _Nullable result, NSError * _Nullable error) {
+            if (!completionHandler) {
+                return;
+            }
+            if (error) {
+                completionHandler(nil, error);
+                return;
+            }
+            if (!result || [result isKindOfClass:[NSNull class]]) {
+                // we can consider this an empty result
+                completionHandler(nil, nil);
+                return;
+            }
+            completionHandler(result, nil);
+        }];
+    } else {
+        [self evaluateJavaScript: jsToExecute completionHandler: completionHandler];
+    }
+}
+
 
 /**
  * Private method to convert a Objective-C BOOL value to JS boolean value.
